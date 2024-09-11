@@ -1,0 +1,2 @@
+# FrenchOnionSoup
+Dist Plugin
