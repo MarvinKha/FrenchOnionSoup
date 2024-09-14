@@ -35,6 +35,12 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
+    oversampling= std::make_unique <juce::dsp::Oversampling<float>>(2,2, juce::dsp::Oversampling<float>::FilterType::filterHalfBandPolyphaseIIR);
+    oversampling->initProcessing(samplesPerBlock);
+    int latencySamples = oversampling->getLatencyInSamples();
+    setLatencySamples(latencySamples);
+
+
 }
 
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -49,17 +55,31 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         buffer.clear(i, 0, buffer.getNumSamples());
     }
 
-    // do stuff to the audio
+
+
+
+    juce::dsp::AudioBlock<float> mainBufferBlock(buffer);
+    size_t count =  mainBufferBlock.getNumSamples();
+    auto oversampledBlock = juce::dsp::AudioBlock<float>(oversampling->processSamplesUp(mainBufferBlock));
+    count =  oversampledBlock.getNumSamples();
+
+
     float amount = *distAmount;
 
-    for(int channel = 0; channel < totalNumInputChannels; ++channel) {
-        auto* channelData = buffer.getWritePointer(channel);
+    for (int channel = 0; channel < oversampledBlock.getNumChannels(); ++channel)
+    {
+        auto* channelData = oversampledBlock.getChannelPointer(channel);
 
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
-            channelData[sample] = std::tanh(amount * channelData[sample]);
-
+        for (int sample = 0; sample < oversampledBlock.getNumSamples(); ++sample)
+        {
+            channelData[sample] = std::tanh(amount * channelData[sample]); 
+            
         }
     }
+    juce::dsp::ProcessContextReplacing<float> context(oversampledBlock);
+
+    oversampling->processSamplesDown(mainBufferBlock);
+
 }
 
 const juce::String PluginProcessor::getName() const
